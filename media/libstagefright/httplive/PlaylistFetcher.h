@@ -145,8 +145,6 @@ protected:
     int32_t mNumRetries;
     bool mStartup;
     bool mIDRFound;
-    bool mLastIDRFound;
-    int64_t mLastIDRTimeUs;
     int32_t mSeekMode;
     bool mTimeChangeSignaled;
     int64_t mNextPTSTimeUs;
@@ -172,7 +170,6 @@ protected:
     int64_t mFirstTimeUs;
     int64_t mSegmentFirstPTS;
     sp<AnotherPacketSource> mVideoBuffer;
-    sp<AnotherPacketSource> mAudioBuffer;
 
     // Stores the initialization vector to decrypt the next block of cipher text, which can
     // either be derived from the sequence number, read from the manifest, or copied from

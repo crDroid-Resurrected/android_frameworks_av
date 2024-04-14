@@ -1149,10 +1149,9 @@ status_t AudioPolicyManager::startOutput(audio_io_handle_t output,
     mOutputRoutes.incRouteActivity(session);
 
     audio_devices_t newDevice;
-    AudioMix *policyMix = NULL;
+    sp<AudioPolicyMix> policyMix = outputDesc->mPolicyMix.promote();
     const char *address = NULL;
-    if (outputDesc->mPolicyMix != NULL) {
-        policyMix = outputDesc->mPolicyMix;
+    if (policyMix != NULL) {
         address = policyMix->mDeviceAddress.string();
         if ((policyMix->mRouteFlags & MIX_ROUTE_FLAG_RENDER) == MIX_ROUTE_FLAG_RENDER) {
             newDevice = policyMix->mDeviceType;
@@ -1321,12 +1320,13 @@ status_t AudioPolicyManager::stopOutput(audio_io_handle_t output,
     if (outputDesc->mRefCount[stream] == 1) {
         // Automatically disable the remote submix input when output is stopped on a
         // re routing mix of type MIX_TYPE_RECORDERS
+        sp<AudioPolicyMix> policyMix = outputDesc->mPolicyMix.promote();
         if (audio_is_remote_submix_device(outputDesc->mDevice) &&
-                outputDesc->mPolicyMix != NULL &&
-                outputDesc->mPolicyMix->mMixType == MIX_TYPE_RECORDERS) {
+                policyMix != NULL &&
+                policyMix->mMixType == MIX_TYPE_RECORDERS) {
             setDeviceConnectionStateInt(AUDIO_DEVICE_IN_REMOTE_SUBMIX,
                     AUDIO_POLICY_DEVICE_STATE_UNAVAILABLE,
-                    outputDesc->mPolicyMix->mDeviceAddress,
+                    policyMix->mDeviceAddress,
                     "remote-submix");
         }
     }
@@ -1491,7 +1491,7 @@ status_t AudioPolicyManager::getInputForAttr(const audio_attributes_t *attr,
     String8 address = String8("");
     audio_source_t inputSource = attr->source;
     audio_source_t halInputSource;
-    AudioMix *policyMix = NULL;
+    sp<AudioPolicyMix> policyMix;
 
     if (inputSource == AUDIO_SOURCE_DEFAULT) {
         inputSource = AUDIO_SOURCE_MIC;
@@ -1567,7 +1567,7 @@ audio_io_handle_t AudioPolicyManager::getInputForDevice(audio_devices_t device,
                                                         audio_format_t format,
                                                         audio_channel_mask_t channelMask,
                                                         audio_input_flags_t flags,
-                                                        AudioMix *policyMix)
+                                                        const sp<AudioPolicyMix> &policyMix)
 {
     audio_io_handle_t input = AUDIO_IO_HANDLE_NONE;
     audio_source_t halInputSource = inputSource;
@@ -1757,10 +1757,11 @@ status_t AudioPolicyManager::startInput(audio_io_handle_t input,
     mInputRoutes.incRouteActivity(session);
 
     if (!inputDesc->isActive() || mInputRoutes.hasRouteChanged(session)) {
+        sp<AudioPolicyMix> policyMix = inputDesc->mPolicyMix.promote();
         // if input maps to a dynamic policy with an activity listener, notify of state change
-        if ((inputDesc->mPolicyMix != NULL)
-                && ((inputDesc->mPolicyMix->mCbFlags & AudioMix::kCbFlagNotifyActivity) != 0)) {
-            mpClientInterface->onDynamicPolicyMixStateUpdate(inputDesc->mPolicyMix->mDeviceAddress,
+        if ((policyMix != NULL)
+                && ((policyMix->mCbFlags & AudioMix::kCbFlagNotifyActivity) != 0)) {
+            mpClientInterface->onDynamicPolicyMixStateUpdate(policyMix->mDeviceAddress,
                     MIX_STATE_MIXING);
         }
 
@@ -1779,10 +1780,10 @@ status_t AudioPolicyManager::startInput(audio_io_handle_t input,
         // For remote submix (a virtual device), we open only one input per capture request.
         if (audio_is_remote_submix_device(inputDesc->mDevice)) {
             String8 address = String8("");
-            if (inputDesc->mPolicyMix == NULL) {
+            if (policyMix == NULL) {
                 address = String8("0");
-            } else if (inputDesc->mPolicyMix->mMixType == MIX_TYPE_PLAYERS) {
-                address = inputDesc->mPolicyMix->mDeviceAddress;
+            } else if (policyMix->mMixType == MIX_TYPE_PLAYERS) {
+                address = policyMix->mDeviceAddress;
             }
             if (address != "") {
                 setDeviceConnectionStateInt(AUDIO_DEVICE_OUT_REMOTE_SUBMIX,
@@ -1826,10 +1827,11 @@ status_t AudioPolicyManager::stopInput(audio_io_handle_t input,
     mInputRoutes.decRouteActivity(session);
 
     if (!inputDesc->isActive()) {
+        sp<AudioPolicyMix> policyMix = inputDesc->mPolicyMix.promote();
         // if input maps to a dynamic policy with an activity listener, notify of state change
-        if ((inputDesc->mPolicyMix != NULL)
-                && ((inputDesc->mPolicyMix->mCbFlags & AudioMix::kCbFlagNotifyActivity) != 0)) {
-            mpClientInterface->onDynamicPolicyMixStateUpdate(inputDesc->mPolicyMix->mDeviceAddress,
+        if ((policyMix != NULL)
+                && ((policyMix->mCbFlags & AudioMix::kCbFlagNotifyActivity) != 0)) {
+            mpClientInterface->onDynamicPolicyMixStateUpdate(policyMix->mDeviceAddress,
                     MIX_STATE_IDLE);
         }
 
@@ -1837,10 +1839,10 @@ status_t AudioPolicyManager::stopInput(audio_io_handle_t input,
         // used by a policy mix of type MIX_TYPE_RECORDERS
         if (audio_is_remote_submix_device(inputDesc->mDevice)) {
             String8 address = String8("");
-            if (inputDesc->mPolicyMix == NULL) {
+            if (policyMix == NULL) {
                 address = String8("0");
-            } else if (inputDesc->mPolicyMix->mMixType == MIX_TYPE_PLAYERS) {
-                address = inputDesc->mPolicyMix->mDeviceAddress;
+            } else if (policyMix->mMixType == MIX_TYPE_PLAYERS) {
+                address = policyMix->mDeviceAddress;
             }
             if (address != "") {
                 setDeviceConnectionStateInt(AUDIO_DEVICE_OUT_REMOTE_SUBMIX,
@@ -1882,7 +1884,7 @@ void AudioPolicyManager::releaseInput(audio_io_handle_t input,
     ALOG_ASSERT(inputDesc != 0);
 
     sp<AudioSession> audioSession = inputDesc->getAudioSession(session);
-    if (audioSession == 0) {
+    if (index < 0) {
         ALOGW("releaseInput() unknown session %d on input %d", session, input);
         return;
     }
@@ -3192,8 +3194,7 @@ status_t AudioPolicyManager::setMasterMono(bool mono)
         Vector<audio_io_handle_t> offloaded;
         for (size_t i = 0; i < mOutputs.size(); ++i) {
             sp<SwAudioOutputDescriptor> desc = mOutputs.valueAt(i);
-            if (desc->mFlags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD ||
-                    desc->mFlags & AUDIO_OUTPUT_FLAG_DIRECT_PCM) {
+            if (desc->mFlags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD) {
                 offloaded.push(desc->mIoHandle);
             }
         }
@@ -3897,7 +3898,7 @@ status_t AudioPolicyManager::checkOutputsForDevice(const sp<DeviceDescriptor> de
                                   address.string());
                         }
                         policyMix->setOutput(desc);
-                        desc->mPolicyMix = policyMix->getMix();
+                        desc->mPolicyMix = policyMix;
 
                     } else if (((desc->mFlags & AUDIO_OUTPUT_FLAG_DIRECT) == 0) &&
                                     hasPrimaryOutput()) {
@@ -4372,9 +4373,7 @@ void AudioPolicyManager::checkOutputForAllStrategies()
 void AudioPolicyManager::checkA2dpSuspend()
 {
     audio_io_handle_t a2dpOutput = mOutputs.getA2dpOutput();
-    bool a2dpOnPrimary = mOutputs.isA2dpOnPrimary();
-
-    if ((a2dpOutput == 0) && !a2dpOnPrimary) {
+    if (a2dpOutput == 0 || mOutputs.isA2dpOnPrimary()) {
         mA2dpSuspended = false;
         return;
     }
@@ -4387,15 +4386,13 @@ void AudioPolicyManager::checkA2dpSuspend()
     //      (NOT already suspended) &&
     //      ((SCO device is connected &&
     //       (forced usage for communication || for record is SCO))) ||
-    //      (phone state is ringing || in call) &&
-    //      (A2DP output is present and not on primary output)
+    //      (phone state is ringing || in call)
     //
     // restore A2DP output if:
     //      (Already suspended) &&
     //      ((SCO device is NOT connected ||
     //       (forced usage NOT for communication && NOT for record is SCO))) &&
-    //      (phone state is NOT ringing && NOT in call) &&
-    //      (A2DP output is present and not on primary output)
+    //      (phone state is NOT ringing && NOT in call)
     //
     if (mA2dpSuspended) {
         if ((!isScoConnected ||
@@ -4404,22 +4401,8 @@ void AudioPolicyManager::checkA2dpSuspend()
              ((mEngine->getPhoneState() != AUDIO_MODE_IN_CALL) &&
               (mEngine->getPhoneState() != AUDIO_MODE_RINGTONE))) {
 
-            if ((a2dpOutput != 0) && !a2dpOnPrimary) {
-                mpClientInterface->restoreOutput(a2dpOutput);
-            }
+            mpClientInterface->restoreOutput(a2dpOutput);
             mA2dpSuspended = false;
-            // if a2dp on primary, unmute the strategies which may be mute during a2dp suspend
-            if (a2dpOnPrimary) {
-                for (int i = 0; i < NUM_STRATEGIES; i++) {
-                    for (size_t j = 0; j < mOutputs.size(); j++) {
-                        sp<AudioOutputDescriptor> desc = mOutputs.valueAt(j);
-                        if (desc->mStrategyMutedByA2dpSuspended[i]) {
-                            setStrategyMute((routing_strategy)i, false, desc, 0,
-                                               getDeviceForStrategy((routing_strategy)i, false /*fromCache*/));
-                        }
-                    }
-                }
-            }
         }
     } else {
         if ((isScoConnected &&
@@ -4428,39 +4411,7 @@ void AudioPolicyManager::checkA2dpSuspend()
              ((mEngine->getPhoneState() == AUDIO_MODE_IN_CALL) ||
               (mEngine->getPhoneState() == AUDIO_MODE_RINGTONE))) {
 
-            if ((a2dpOutput != 0) && !a2dpOnPrimary) {
-                mpClientInterface->suspendOutput(a2dpOutput);
-            }
-            // if a2dp on primay, need to mute the strategies which device is a2dp when suspended
-            if (a2dpOnPrimary) {
-                uint32_t muteWaitMs = 0;
-                for (int i = 0; i < NUM_STRATEGIES; i++) {
-                    audio_devices_t curDevice = getDeviceForStrategy((routing_strategy)i, false /*fromCache*/);
-                    bool mute = (popcount(curDevice) == 1) && (curDevice & AUDIO_DEVICE_OUT_ALL_A2DP);
-                    for (size_t j = 0; j < mOutputs.size(); j++) {
-                        sp<AudioOutputDescriptor> desc = mOutputs.valueAt(j);
-                        // skip output if it does not share any device with a2dp devices
-                        if ((desc->supportedDevices() & AUDIO_DEVICE_OUT_ALL_A2DP)
-                               == AUDIO_DEVICE_NONE) {
-                            continue;
-                        }
-                        if (mute) {
-                            desc->mStrategyMutedByA2dpSuspended[i] = true;
-                            setStrategyMute((routing_strategy)i, mute, desc);
-                            if (isStrategyActive(desc, (routing_strategy)i)) {
-                                // as explained in checkDeviceMuteStrategy(), the mute time should
-                                // be set to account for the delay between now and the next time the
-                                // audioflinger thread for this output will process a buffer, and
-                                // long enough to wait for PCM with previous volume applied empty.
-                                if (muteWaitMs < desc->latency()) {
-                                    muteWaitMs = desc->latency();
-                                }
-                            }
-                        }
-                    }
-                }
-                usleep(muteWaitMs * 1000);
-            }
+            mpClientInterface->suspendOutput(a2dpOutput);
             mA2dpSuspended = true;
         }
     }
@@ -5092,7 +5043,7 @@ sp<IOProfile> AudioPolicyManager::getInputProfile(audio_devices_t device,
 
 
 audio_devices_t AudioPolicyManager::getDeviceAndMixForInputSource(audio_source_t inputSource,
-                                                                  AudioMix **policyMix)
+                                                                  sp<AudioPolicyMix> *policyMix)
 {
     audio_devices_t availableDeviceTypes = mAvailableInputDevices.types() & ~AUDIO_DEVICE_BIT_IN;
     audio_devices_t selectedDeviceFromMix =

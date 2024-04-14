@@ -468,14 +468,7 @@ void NuPlayer::Decoder::onResume(bool notifyComplete) {
     if (notifyComplete) {
         mResumePending = true;
     }
-
-    if (mCodec != NULL) {
-        mCodec->start();
-    } else {
-        ALOGW("Decoder %s onResume without a valid codec object",
-              mComponentName.c_str());
-        handleError(NO_INIT);
-    }
+    mCodec->start();
 }
 
 void NuPlayer::Decoder::doFlush(bool notifyComplete) {

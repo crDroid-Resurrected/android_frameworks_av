@@ -27,7 +27,7 @@
 namespace android {
 
 class IOProfile;
-class AudioMix;
+class AudioPolicyMix;
 class AudioPolicyClientInterface;
 class DeviceDescriptor;
 
@@ -83,8 +83,6 @@ public:
     int mMuteCount[AUDIO_STREAM_CNT];     // mute request counter
     bool mStrategyMutedByDevice[NUM_STRATEGIES]; // strategies muted because of incompatible
                                         // device selection. See checkDeviceMuteStrategies()
-    bool mStrategyMutedByA2dpSuspended[NUM_STRATEGIES]; // strategies muted because of a2dp
-                                        // suspended but selected device is still a2dp
     AudioPolicyClientInterface *mClientInterface;
 
 protected:
@@ -126,7 +124,7 @@ public:
     const sp<IOProfile> mProfile;          // I/O profile this output derives from
     uint32_t mLatency;                  //
     audio_output_flags_t mFlags;   //
-    AudioMix *mPolicyMix;             // non NULL when used by a dynamic policy
+    wp<AudioPolicyMix> mPolicyMix;           // non NULL when used by a dynamic policy
     sp<SwAudioOutputDescriptor> mOutput1;    // used by duplicated outputs: first output
     sp<SwAudioOutputDescriptor> mOutput2;    // used by duplicated outputs: second output
     uint32_t mDirectOpenCount; // number of clients using this output (direct outputs only)

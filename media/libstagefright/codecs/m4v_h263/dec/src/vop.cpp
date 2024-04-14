@@ -15,6 +15,8 @@
  * and limitations under the License.
  * -------------------------------------------------------------------
  */
+#include "log/log.h"
+
 #include "mp4dec_lib.h"
 #include "bitstream.h"
 #include "vlc_decode.h"
@@ -407,7 +409,9 @@ decode_vol:
         if (!BitstreamRead1Bits(stream)) return PV_FAIL;
 
         /* video_object_layer_width (13 bits) */
-        video->displayWidth = video->width = (int) BitstreamReadBits16(stream, 13);
+        tmpvar = BitstreamReadBits16(stream, 13);
+        if (!tmpvar) return PV_FAIL;
+        video->displayWidth = video->width = tmpvar;
 
         /* round up to a multiple of MB_SIZE.   08/09/2000 */
         video->width = (video->width + 15) & -16;
@@ -417,7 +421,9 @@ decode_vol:
         if (!BitstreamRead1Bits(stream)) return PV_FAIL;
 
         /* video_object_layer_height (13 bits) */
-        video->displayHeight = video->height = (int) BitstreamReadBits16(stream, 13);
+        tmpvar = BitstreamReadBits16(stream, 13);
+        if (!tmpvar) return PV_FAIL;
+        video->displayHeight = video->height = tmpvar;
 
         /* round up to a multiple of MB_SIZE.   08/09/2000 */
         video->height = (video->height + 15) & -16;
@@ -1336,8 +1342,7 @@ PV_STATUS DecodeShortHeader(VideoDecData *video, Vop *currVop)
             }
             tmpvar = BitstreamReadBits16(stream, 9);
 
-            video->displayWidth = (tmpvar + 1) << 2;
-            video->width = (video->displayWidth + 15) & -16;
+            int tmpDisplayWidth = (tmpvar + 1) << 2;
             /* marker bit */
             if (!BitstreamRead1Bits(stream))
             {
@@ -1350,14 +1355,29 @@ PV_STATUS DecodeShortHeader(VideoDecData *video, Vop *currVop)
                 status = PV_FAIL;
                 goto return_point;
             }
-            video->displayHeight = tmpvar << 2;
-            video->height = (video->displayHeight + 15) & -16;
+            int tmpDisplayHeight = tmpvar << 2;
+            int tmpHeight = (tmpDisplayHeight + 15) & -16;
+            int tmpWidth = (tmpDisplayWidth + 15) & -16;
 
-            if (video->height * video->width > video->size)
+            if (tmpWidth > video->width)
             {
+                // while allowed by the spec, this decoder does not actually
+                // support an increase in size.
+                ALOGE("width increase not supported");
                 status = PV_FAIL;
                 goto return_point;
             }
+            if (tmpHeight * tmpWidth > video->size)
+            {
+                // This is just possibly "b/37079296".
+                ALOGE("b/37079296");
+                status = PV_FAIL;
+                goto return_point;
+            }
+            video->displayWidth = tmpDisplayWidth;
+            video->width = tmpWidth;
+            video->displayHeight = tmpDisplayHeight;
+            video->height = tmpHeight;
 
             video->nTotalMB = video->width / MB_SIZE * video->height / MB_SIZE;
 

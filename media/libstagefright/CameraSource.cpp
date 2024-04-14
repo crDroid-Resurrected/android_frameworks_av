@@ -993,6 +993,14 @@ void CameraSource::releaseRecordingFrame(const sp<IMemory>& frame) {
 
         if (handle != nullptr) {
             // Frame contains a VideoNativeHandleMetadata. Send the handle back to camera.
+            ssize_t offset;
+            size_t size;
+            sp<IMemoryHeap> heap = frame->getMemory(&offset, &size);
+            if (heap->getHeapID() != mMemoryHeapBase->getHeapID()) {
+                ALOGE("%s: Mismatched heap ID, ignoring release (got %x, expected %x)",
+		     __FUNCTION__, heap->getHeapID(), mMemoryHeapBase->getHeapID());
+                return;
+            }
             releaseRecordingFrameHandle(handle);
             mMemoryBases.push_back(frame);
             mMemoryBaseAvailableCond.signal();
@@ -1160,7 +1168,7 @@ void CameraSource::releaseRecordingFrameHandle(native_handle_t* handle) {
         int64_t token = IPCThreadState::self()->clearCallingIdentity();
         mCamera->releaseRecordingFrameHandle(handle);
         IPCThreadState::self()->restoreCallingIdentity(token);
-    } else if (handle != nullptr) {
+    } else {
         native_handle_close(handle);
         native_handle_delete(handle);
     }

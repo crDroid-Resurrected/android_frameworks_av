@@ -743,8 +743,8 @@ status_t MediaCodecSource::feedEncoderInputBuffers() {
 }
 
 status_t MediaCodecSource::onStart(MetaData *params) {
-    if (mStopping | mOutput.lock()->mEncoderReachedEOS) {
-        ALOGE("Failed to start while we're stopping or encoder already stopped due to EOS error");
+    if (mStopping) {
+        ALOGE("Failed to start while we're stopping");
         return INVALID_OPERATION;
     }
 
@@ -883,6 +883,7 @@ void MediaCodecSource::onMessageReceived(const sp<AMessage> &msg) {
             }
 
             MediaBuffer *mbuf = new MediaBuffer(outbuf->size());
+            memcpy(mbuf->data(), outbuf->data(), outbuf->size());
             sp<MetaData> meta = mbuf->meta_data();
             AVUtils::get()->setDeferRelease(meta);
             mbuf->setObserver(this);

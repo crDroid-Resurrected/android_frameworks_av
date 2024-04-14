@@ -1190,9 +1190,8 @@ void NuPlayer::onMessageReceived(const sp<AMessage> &msg) {
                 mRenderer->flush(
                         true /* audio */, false /* notifyComplete */);
                 if (mVideoDecoder != NULL) {
-                    mDeferredActions.push_back(
-                            new FlushDecoderAction(FLUSH_CMD_NONE /* audio */,
-                                                   FLUSH_CMD_FLUSH /* video */));
+                    mRenderer->flush(
+                            false /* audio */, false /* notifyComplete */);
                 }
                 mRenderer->signalAudioTearDownComplete();
 
@@ -1200,17 +1199,6 @@ void NuPlayer::onMessageReceived(const sp<AMessage> &msg) {
                 if (!msg->findInt64("positionUs", &positionUs)) {
                     positionUs = mPreviousSeekTimeUs;
                 }
-
-                mDeferredActions.push_back(
-                    new SeekAction(positionUs));
-
-                // After a flush without shutdown, decoder is paused.
-                // Don't resume it until source seek is done, otherwise it could
-                // start pulling stale data too soon.
-                mDeferredActions.push_back(
-                        new ResumeDecoderAction(false));
-
-                processDeferredActions();
 
                 restartAudio(
                         positionUs, reason == Renderer::kForceNonOffload /* forceNonOffload */,
@@ -1587,7 +1575,6 @@ void NuPlayer::restartAudio(
     mRenderer->flush(true /* audio */, false /* notifyComplete */);
     if (mVideoDecoder != NULL) {
         mRenderer->flush(false /* audio */, false /* notifyComplete */);
-        flushDecoder(false /* audio */, false /*needShutdown*/);
     }
 
     performSeek(currentPositionUs);
@@ -1598,10 +1585,6 @@ void NuPlayer::restartAudio(
     }
     if (needsToCreateAudioDecoder) {
         instantiateDecoder(true /* audio */, &mAudioDecoder, !forceNonOffload);
-    }
-    if (mVideoDecoder != NULL) {
-        // After a flush without shutdown, decoder is paused.
-        mVideoDecoder->signalResume(false /* needNotify */);
     }
 }
 
