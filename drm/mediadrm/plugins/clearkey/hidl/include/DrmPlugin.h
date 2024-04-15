@@ -323,13 +323,19 @@ private:
     std::vector<KeyValue> mPlayPolicy;
     std::map<std::string, std::string> mStringProperties;
     std::map<std::string, std::vector<uint8_t> > mByteArrayProperties;
-    std::map<std::vector<uint8_t>, SecurityLevel> mSecurityLevel;
+    std::map<std::vector<uint8_t>, SecurityLevel> mSecurityLevel
+        GUARDED_BY(mSecurityLevelLock);
     sp<IDrmPluginListener> mListener;
     SessionLibrary *mSessionLibrary;
     int64_t mOpenSessionOkCount;
     int64_t mCloseSessionOkCount;
     int64_t mCloseSessionNotOpenedCount;
     uint32_t mNextSecureStopId;
+
+    DeviceFiles mFileHandle GUARDED_BY(mFileHandleLock);
+    Mutex mFileHandleLock;
+    Mutex mSecureStopLock;
+    Mutex mSecurityLevelLock;
 
     CLEARKEY_DISALLOW_COPY_AND_ASSIGN_AND_NEW(DrmPlugin);
 };
